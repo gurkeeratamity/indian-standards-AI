@@ -1,0 +1,26 @@
+{
+  "data/standards/10484_2021.pdf|633283|1787988399": {
+    "is_number": "10484",
+    "part": null,
+    "year": "2021",
+    "source": "filename",
+    "readable": true,
+    "pages": null
+  },
+  "data/standards/13688_2020.pdf|604296|1787988431": {
+    "is_number": "13688",
+    "part": null,
+    "year": "2020",
+    "source": "filename",
+    "readable": true,
+    "pages": null
+  },
+  "data/standards/4938_2009_reaff2024.pdf|532230|1787988459": {
+    "is_number": "4938",
+    "part": null,
+    "year": "2009",
+    "source": "filename",
+    "readable": true,
+    "pages": null
+  }
+}
