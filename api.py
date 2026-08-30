@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from ingest import get_collection
 from search import search
+from requirement_extractor import extract_requirement, ExtractedRequirement
 
 app = FastAPI()
 
@@ -15,6 +16,10 @@ class SearchRequest(BaseModel):
 
 
 class RecommendRequest(BaseModel):
+    query: str
+
+
+class ExtractRequest(BaseModel):
     query: str
 
 
@@ -125,9 +130,6 @@ def recommend_endpoint(request: RecommendRequest):
         is_number = meta.get("is_number", "")
         key = standard_id if standard_id else is_number
 
-        # Transparent similarity score derived from vector distance.
-        # This is NOT an AI-generated confidence score — it is a plain
-        # numeric transform of ChromaDB's returned distance for this chunk.
         similarity = 1 / (1 + distance)
 
         if key not in groups:
@@ -154,8 +156,6 @@ def recommend_endpoint(request: RecommendRequest):
     recommendations = []
     for group in groups.values():
         similarities = group.pop("similarities")
-        # Standard-level score: average similarity across its retrieved
-        # supporting chunks. Transparent aggregation, not a model output.
         score = sum(similarities) / len(similarities)
         group["score"] = round(score, 6)
         recommendations.append(group)
@@ -167,3 +167,13 @@ def recommend_endpoint(request: RecommendRequest):
         "recommendation_count": len(recommendations),
         "recommendations": recommendations,
     }
+
+
+@app.post("/extract", response_model=ExtractedRequirement)
+def extract_endpoint(request: ExtractRequest):
+    try:
+        return extract_requirement(request.query)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
