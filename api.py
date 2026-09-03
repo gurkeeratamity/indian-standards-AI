@@ -1,16 +1,22 @@
 import re
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
+from ollama import list as ollama_list
 
 from ingest import get_collection
 from search import search
 from requirement_extractor import extract_requirement, ExtractedRequirement
+from rag import ask_question
+
 
 app = FastAPI()
 
 collection = get_collection()
 
 MAX_QUERY_LENGTH = 10000
+
+OLLAMA_MODEL = "llama3.2:3b"
 
 
 def _validate_query_value(v: str) -> str:
@@ -41,6 +47,15 @@ class RecommendRequest(BaseModel):
 
 
 class ExtractRequest(BaseModel):
+    query: str
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v):
+        return _validate_query_value(v)
+
+
+class AskRequest(BaseModel):
     query: str
 
     @field_validator("query")
@@ -220,6 +235,7 @@ def _check_capacity(capacity_value: float, capacity_unit, chunks: list):
                 num = float(num_str)
             except ValueError:
                 continue
+
             if abs(num - float(capacity_value)) < 0.01:
                 if matched_evidence is None:
                     matched_evidence = _extract_snippet(text, m.group(0))
@@ -331,7 +347,64 @@ def classify_recommendation(retrieval_score: float, matched_count: int, conflict
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    chromadb_status = "ok"
+    ollama_status = "ok"
+
+    # Check that the existing ChromaDB collection object is accessible.
+    # This does NOT create another ChromaDB connection.
+    try:
+        collection.count()
+    except Exception:
+        chromadb_status = "error"
+
+    # Check that Ollama is reachable and that the configured model exists.
+    try:
+        response = ollama_list()
+
+        models = getattr(response, "models", [])
+
+        model_available = any(
+            getattr(model, "model", "") == OLLAMA_MODEL
+            for model in models
+        )
+
+        if not model_available:
+            ollama_status = "error"
+
+    except Exception:
+        ollama_status = "error"
+
+    if chromadb_status == "ok" and ollama_status == "ok":
+        return {
+            "status": "ok",
+            "chromadb": "ok",
+            "ollama": "ok"
+        }
+
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "degraded",
+            "chromadb": chromadb_status,
+            "ollama": ollama_status
+        }
+    )
+
+
+@app.post("/ask")
+def ask_endpoint(request: AskRequest):
+    try:
+        return ask_question(request.query)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"RAG generation failed: {e}"
+        )
 
 
 @app.post("/search")
