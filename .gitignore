@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local ChromaDB
+dairy_vector_db/
+
+# Environment/secrets
+.env
+.env.*
+
+# OS/editor files
+.vscode/
+.idea/
